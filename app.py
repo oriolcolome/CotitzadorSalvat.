@@ -1,3 +1,15 @@
+Tens tota la raó. En fer-ho "minimalista" he retallat massa text i han desaparegut les explicacions útils.
+
+Aquí tens la **Versió 15.0**.
+
+### Què té aquesta versió?
+
+1.  **Disseny Net:** Manté el títol i el logo sense coses rares (com volies).
+2.  **Instruccions Completes:** He recuperat el text detallat a la barra lateral (esquerra), però ben ordenat i sense emojis que molestin.
+
+Copia i enganxa tot això a `app.py`:
+
+```python
 import streamlit as st
 import pandas as pd
 import os
@@ -15,25 +27,35 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # --- CAPÇALERA SIMPLE (LOGO + TÍTOL) ---
-col_logo, col_titol = st.columns([1, 6]) # Ajustem l'amplada
+col_logo, col_titol = st.columns([1, 6])
 
 with col_logo:
-    # Busquem el logo localment
     arxius = os.listdir('.')
     logo_local = next((f for f in arxius if f.lower().startswith('logo') and f.endswith(('.png', '.jpg', '.jpeg'))), None)
     if logo_local:
-        st.image(logo_local, width=100) # Logo net
+        st.image(logo_local, width=100)
 
 with col_titol:
-    st.title("Calculadora d'Enviaments") # Títol net sense emojis
+    st.title("Calculadora d'Enviaments")
 
-# --- BARRA LATERAL (INSTRUCCIONS TEXT PLA) ---
+# --- BARRA LATERAL (INSTRUCCIONS DETALLADES RECUPERADES) ---
 with st.sidebar:
-    st.header("Instruccions")
+    st.header("Guia d'Ús")
+    
     st.markdown("""
-    1. **Destinació:** Selecciona País i els 2 primers dígits del CP.
-    2. **Serveis:** Marca si cal ADR, Entrega o Cita.
-    3. **Càrrega:** Defineix mides i pes dels palets.
+    ### 1. Destinació
+    * Selecciona el **País** al desplegable.
+    * Escriu els **2 primers dígits** del Codi Postal.
+    * *Exemple: Per a 08001, posa 08.*
+
+    ### 2. Serveis Extres
+    * **ADR:** Per a mercaderies perilloses.
+    * **Entrega:** Si és domicili particular o cal plataforma.
+    * **Cita Prèvia:** Si cal concertar hora.
+
+    ### 3. La Càrrega
+    * Tria tipus de palet (**EUR**, **Americà**...).
+    * Indica **pes per palet** i **quantitat**.
     """)
 
 # --- CÀRREGA DE DADES (MOTOR OPTIMITZAT) ---
@@ -181,7 +203,7 @@ with c_right:
 
                     total_final = preu_base + total_extres
 
-                    # ÚNIC TOC DE COLOR (NECESSARI PER DESTACAR EL PREU)
+                    # RESULTAT FINAL
                     st.markdown(f"""
                     <div class="success-card">
                         <div style="font-size:16px; font-weight:bold;">PREU TOTAL ESTIMAT</div>
@@ -203,3 +225,4 @@ with c_right:
                         for d in detalls: st.write(f"+ {d}")
                 else:
                     st.error("Pes fora de rang.")
+```
