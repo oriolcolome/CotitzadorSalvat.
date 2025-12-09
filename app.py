@@ -6,7 +6,7 @@ import gc
 # --- CONFIGURACIÓ BÀSICA ---
 st.set_page_config(page_title="Cotitzador Logística", page_icon="🚛", layout="wide")
 
-# --- ESTILS MÍNIMS (Només per al resultat final verd) ---
+# --- ESTILS ---
 st.markdown("""
     <style>
     .big-font { font-size:36px !important; font-weight: bold; color: #166534; }
@@ -14,41 +14,28 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- CAPÇALERA SIMPLE (LOGO + TÍTOL) ---
+# --- CAPÇALERA SIMPLE ---
 col_logo, col_titol = st.columns([1, 6])
-
 with col_logo:
     arxius = os.listdir('.')
     logo_local = next((f for f in arxius if f.lower().startswith('logo') and f.endswith(('.png', '.jpg', '.jpeg'))), None)
-    if logo_local:
-        st.image(logo_local, width=100)
-
+    if logo_local: st.image(logo_local, width=100)
 with col_titol:
     st.title("Calculadora d'Enviaments")
 
-# --- BARRA LATERAL (INSTRUCCIONS DETALLADES RECUPERADES) ---
+# --- BARRA LATERAL ---
 with st.sidebar:
     st.header("Guia d'Ús")
-    
     st.markdown("""
-    ### 1. Destinació
-    * Selecciona el **País** al desplegable.
-    * Escriu els **2 primers dígits** del Codi Postal.
-    * *Exemple: Per a 08001, posa 08.*
-
-    ### 2. Serveis Extres
-    * **ADR:** Per a mercaderies perilloses.
-    * **Entrega:** Si és domicili particular o cal plataforma.
-    * **Cita Prèvia:** Si cal concertar hora.
-
-    ### 3. La Càrrega
-    * Tria tipus de palet (**EUR**, **Americà**...).
-    * Indica **pes per palet** i **quantitat**.
+    1. **Destinació:** País i CP (2 dígits).
+    2. **Serveis:** Marca ADR, Entrega o Cita.
+    3. **Càrrega:** Defineix palets i pes.
     """)
+    st.info("ℹ️ El Gasoil es calcula automàticament segons el país.")
 
-# --- CÀRREGA DE DADES (MOTOR OPTIMITZAT) ---
-@st.cache_data(ttl="2h", show_spinner="Carregant...")
-def carregar_dades_light():
+# --- CÀRREGA DE DADES ---
+@st.cache_data(ttl="2h", show_spinner="Carregant tarifes...")
+def carregar_dades_pro():
     gc.collect()
     arxius = os.listdir('.')
     fitxer = next((f for f in arxius if f.endswith('.xlsx') and not f.startswith('~$')), None)
@@ -58,19 +45,20 @@ def carregar_dades_light():
     try:
         xls = pd.ExcelFile(fitxer, engine='openpyxl')
         
-        # DADES GENERALS
+        # 1. DADES GENERALS (Busquem GASOIL i MAUT)
         df_datos = pd.read_excel(xls, "DATOS", header=None, nrows=25)
         fila_pais = df_datos[df_datos.apply(lambda x: x.astype(str).str.contains('PAISES', case=False)).any(axis=1)].index[0]
         df_datos = pd.read_excel(xls, "DATOS", header=fila_pais)
         df_datos.columns = df_datos.columns.str.strip().str.upper()
         df_datos = df_datos.dropna(how='all', axis=1)
 
-        # TARIFES
+        # 2. TARIFES
         df_tarifas = pd.read_excel(xls, "SALIDAS EXPORT", header=None, nrows=25)
         fila_tarifes = df_tarifas[df_tarifas.apply(lambda x: x.astype(str).str.contains('ZIP CODE|AUXILIAR', regex=True, case=False)).any(axis=1)].index[0]
         df_tarifas = pd.read_excel(xls, "SALIDAS EXPORT", header=fila_tarifes)
         df_tarifas.columns = df_tarifas.columns.str.strip().str.upper()
 
+        # Normalització de noms de columnes
         renames = {}
         for col in df_tarifas.columns:
             if 'CITA' in col: renames[col] = 'T.CITA'
@@ -81,7 +69,8 @@ def carregar_dades_light():
         cols_clau = ['PAIS', 'ZIP CODE', 'AUXILIAR']
         cols_existents = [c for c in cols_clau if c in df_tarifas.columns]
         
-        cols_extra = [c for c in ['SALIDAS', 'TRANSIT TIME', 'LLEGADA', 'ADR', 'ENTREGA', 'T.CITA', 'TASA'] if c in df_tarifas.columns]
+        # Carreguem columnes extres (Gasoil, ADR, etc)
+        cols_extra = [c for c in ['SALIDAS', 'TRANSIT TIME', 'LLEGADA', 'ADR', 'ENTREGA', 'T.CITA', 'TASA', 'S.ADR'] if c in df_tarifas.columns]
         mapa = df_tarifas[cols_existents + cols_extra].dropna(subset=cols_existents).copy()
         mapa['ZIP CODE'] = mapa['ZIP CODE'].astype(str).str.replace(".0", "", regex=False).str.zfill(2)
         mapa['PAIS'] = mapa['PAIS'].str.strip().str.upper()
@@ -98,7 +87,7 @@ def carregar_dades_light():
     except Exception as e:
         return None, None, None, str(e)
 
-df_datos, mapa_zones, df_preus, error = carregar_dades_light()
+df_datos, mapa_zones, df_preus, error = carregar_dades_pro()
 
 if error != "OK":
     st.error(f"Error: {error}")
@@ -152,10 +141,18 @@ with c_right:
             if rutes.empty:
                 st.warning(f"No s'ha trobat tarifa per a {pais} CP {cp_norm}")
             else:
+                # SELECCIÓ DE RUTA (LÒGICA MILLORADA ADR)
                 ruta_final = rutes.iloc[0]
+                tarifa_adr_especifica = False
+                
+                # 1. Busquem tarifa específica ADR si l'usuari ho demana
                 if es_adr and 'ADR' in rutes.columns:
                     match = rutes[rutes['ADR'] == "SI"]
-                    if not match.empty: ruta_final = match.iloc[0]
+                    if not match.empty: 
+                        ruta_final = match.iloc[0]
+                        tarifa_adr_especifica = True
+                
+                # 2. Busquem tarifa específica ENTREGA
                 if vol_entrega and 'ENTREGA' in rutes.columns:
                     match = rutes[rutes['ENTREGA'] == "SI"]
                     if not match.empty: ruta_final = match.iloc[0]
@@ -172,14 +169,40 @@ with c_right:
                     total_extres = 0
                     detalls = []
                     
+                    # --- CÀLCUL EXTRES ---
                     info_pais = df_datos[df_datos['PAISES'] == pais].iloc[0]
-                    if str(info_pais.get('MAUT', '')).upper() == 'SI':
-                        pct = info_pais.get('MAUD %', 0)
-                        if pct > 1: pct /= 100
-                        val_maut = preu_base * pct
-                        total_extres += val_maut
-                        detalls.append(f"MAUT ({pct*100:.1f}%): {val_maut:.2f}€")
+                    
+                    # 1. GASOIL (NOU!)
+                    # Busquem columna GASOIL, GASOIL %, o similar a DATOS
+                    pct_gasoil = info_pais.get('GASOIL', info_pais.get('GASOIL %', 0))
+                    if pct_gasoil > 0:
+                        if pct_gasoil > 1: pct_gasoil /= 100 # Convertir 14 a 0.14
+                        val_gasoil = preu_base * pct_gasoil
+                        total_extres += val_gasoil
+                        detalls.append(f"Carburant ({pct_gasoil*100:.2f}%): {val_gasoil:.2f}€")
 
+                    # 2. MAUT
+                    if str(info_pais.get('MAUT', '')).upper() == 'SI':
+                        pct_maut = info_pais.get('MAUD %', 0)
+                        if pct_maut > 1: pct_maut /= 100
+                        val_maut = preu_base * pct_maut
+                        total_extres += val_maut
+                        detalls.append(f"MAUT ({pct_maut*100:.1f}%): {val_maut:.2f}€")
+
+                    # 3. ADR (DESGLOSSAT)
+                    if es_adr:
+                        if tarifa_adr_especifica:
+                            detalls.append("Tarifa Base: Inclou recàrrec ADR")
+                        else:
+                            # Si no hi ha tarifa especifica, mirem si hi ha columna de suplement
+                            supl_adr = ruta_final.get('S.ADR', 0) # Si existeix columna S.ADR
+                            if supl_adr > 0:
+                                total_extres += supl_adr
+                                detalls.append(f"Suplement ADR: {supl_adr:.2f}€")
+                            else:
+                                detalls.append("ADR: Sense cost addicional a tarifa")
+
+                    # 4. CITA i TASAS
                     if vol_cita:
                         val_cita = float(ruta_final.get('T.CITA', 0)) if str(ruta_final.get('T.CITA', 0)).replace('.','').isdigit() else 0
                         total_extres += val_cita
@@ -191,7 +214,7 @@ with c_right:
 
                     total_final = preu_base + total_extres
 
-                    # RESULTAT FINAL
+                    # RESULTAT
                     st.markdown(f"""
                     <div class="success-card">
                         <div style="font-size:16px; font-weight:bold;">PREU TOTAL ESTIMAT</div>
@@ -205,7 +228,6 @@ with c_right:
                     with c1:
                         st.markdown("**Info Operativa**")
                         st.write(f"Zona: {zona}")
-                        st.write(f"Sortides: {dies}")
                         st.write(f"Trànsit: {transit}")
                     with c2:
                         st.markdown("**Desglossament**")
