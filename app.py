@@ -1,15 +1,3 @@
-Tens tota la raó. En fer-ho "minimalista" he retallat massa text i han desaparegut les explicacions útils.
-
-Aquí tens la **Versió 15.0**.
-
-### Què té aquesta versió?
-
-1.  **Disseny Net:** Manté el títol i el logo sense coses rares (com volies).
-2.  **Instruccions Completes:** He recuperat el text detallat a la barra lateral (esquerra), però ben ordenat i sense emojis que molestin.
-
-Copia i enganxa tot això a `app.py`:
-
-```python
 import streamlit as st
 import pandas as pd
 import os
@@ -225,4 +213,3 @@ with c_right:
                         for d in detalls: st.write(f"+ {d}")
                 else:
                     st.error("Pes fora de rang.")
-```
