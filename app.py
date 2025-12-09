@@ -3,105 +3,41 @@ import pandas as pd
 import os
 import gc
 
-# --- CONFIGURACIÓ ---
+# --- CONFIGURACIÓ BÀSICA ---
 st.set_page_config(page_title="Cotitzador Logística", page_icon="🚛", layout="wide")
 
-# --- ESTILS (CSS) PER CENTRAR I MAQUILLAR ---
+# --- ESTILS MÍNIMS (Només per al resultat final verd) ---
 st.markdown("""
     <style>
-    /* Estils generals */
     .big-font { font-size:36px !important; font-weight: bold; color: #166534; }
     .success-card { background-color: #dcfce7; padding: 20px; border-radius: 10px; border: 2px solid #16a34a; text-align: center; }
-    
-    /* CAPÇALERA PERSONALITZADA (LOGO + TÍTOL JUNTS) */
-    .header-container {
-        display: flex;
-        flex-direction: row;
-        align-items: center;
-        justify-content: center;
-        padding: 20px;
-        background-color: white;
-        border-radius: 10px;
-        margin-bottom: 30px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-    }
-    
-    .logo-img {
-        width: 80px;
-        height: auto;
-        margin-right: 20px;
-    }
-    
-    .title-text {
-        font-family: 'Helvetica Neue', sans-serif;
-        color: #0f172a;
-        margin: 0;
-        font-size: 40px;
-        font-weight: 700;
-    }
-    
-    /* Subtítols de secció */
-    .section-header {
-        color: #1e40af;
-        font-size: 20px;
-        font-weight: bold;
-        border-bottom: 2px solid #1e40af;
-        padding-bottom: 5px;
-        margin-top: 10px;
-        margin-bottom: 20px;
-    }
     </style>
 """, unsafe_allow_html=True)
 
-# --- CAPÇALERA AMB HTML (PERQUÈ QUEDI CENTRAT PERFECTE) ---
-# Intentem trobar el logo local, si no, posem una url d'un camió
-arxius = os.listdir('.')
-logo_local = next((f for f in arxius if f.lower().startswith('logo') and f.endswith(('.png', '.jpg', '.jpeg'))), None)
+# --- CAPÇALERA SIMPLE (LOGO + TÍTOL) ---
+col_logo, col_titol = st.columns([1, 6]) # Ajustem l'amplada
 
-if logo_local:
-    # Si tens el fitxer 'logo.png', el farem servir (cal llegir-lo en binari, però per simplificar usem st.image standard ocult i HTML per estructura)
-    # Truc visual: Usem columnes natives però ajustades per centrar
-    c1, c2, c3 = st.columns([1, 2, 1])
-    with c2:
-        st.image(logo_local, width=150)
-        st.markdown("<h1 style='text-align: center;'>Calculadora d'Enviaments</h1>", unsafe_allow_html=True)
-else:
-    # Si no tens logo, usem aquest disseny HTML que queda perfecte
-    st.markdown("""
-    <div class="header-container">
-        <img src="https://cdn-icons-png.flaticon.com/512/6213/6213387.png" class="logo-img">
-        <h1 class="title-text">Calculadora d'Enviaments</h1>
-    </div>
-    """, unsafe_allow_html=True)
+with col_logo:
+    # Busquem el logo localment
+    arxius = os.listdir('.')
+    logo_local = next((f for f in arxius if f.lower().startswith('logo') and f.endswith(('.png', '.jpg', '.jpeg'))), None)
+    if logo_local:
+        st.image(logo_local, width=100) # Logo net
 
+with col_titol:
+    st.title("Calculadora d'Enviaments") # Títol net sense emojis
 
-# --- BARRA LATERAL (INSTRUCCIONS DETALLADES) ---
+# --- BARRA LATERAL (INSTRUCCIONS TEXT PLA) ---
 with st.sidebar:
-    st.header("📖 Guia d'Ús")
-    
+    st.header("Instruccions")
     st.markdown("""
-    ### 1️⃣ Destinació
-    * Selecciona el **País** al desplegable.
-    * Escriu els **2 primers dígits** del Codi Postal.
-    * *Ex: Per a 08001, posa 08.*
-
-    ### 2️⃣ Serveis Extres
-    Marca les caselles si cal:
-    * **ADR:** Per a mercaderies perilloses.
-    * **Entrega:** Si és domicili particular o cal plataforma.
-    * **Cita Prèvia:** Si cal concertar hora.
-
-    ### 3️⃣ La Càrrega
-    * Tria si és **Pallet Europeu**, **Americà** o mida lliure.
-    * Indica **pes per palet** i **quantitat**.
-    
-    ---
-    ℹ️ *Nota: Els suplements (MAUT, Gasoil...) es calculen automàticament.*
+    1. **Destinació:** Selecciona País i els 2 primers dígits del CP.
+    2. **Serveis:** Marca si cal ADR, Entrega o Cita.
+    3. **Càrrega:** Defineix mides i pes dels palets.
     """)
-    st.caption("v13.0 - Disseny Centrat")
 
-# --- CÀRREGA OPTIMITZADA ---
-@st.cache_data(ttl="2h", show_spinner="Carregant tarifes...")
+# --- CÀRREGA DE DADES (MOTOR OPTIMITZAT) ---
+@st.cache_data(ttl="2h", show_spinner="Carregant...")
 def carregar_dades_light():
     gc.collect()
     arxius = os.listdir('.')
@@ -112,7 +48,7 @@ def carregar_dades_light():
     try:
         xls = pd.ExcelFile(fitxer, engine='openpyxl')
         
-        # DADES
+        # DADES GENERALS
         df_datos = pd.read_excel(xls, "DATOS", header=None, nrows=25)
         fila_pais = df_datos[df_datos.apply(lambda x: x.astype(str).str.contains('PAISES', case=False)).any(axis=1)].index[0]
         df_datos = pd.read_excel(xls, "DATOS", header=fila_pais)
@@ -155,25 +91,25 @@ def carregar_dades_light():
 df_datos, mapa_zones, df_preus, error = carregar_dades_light()
 
 if error != "OK":
-    st.error(f"⚠️ Error: {error}")
+    st.error(f"Error: {error}")
     st.stop()
 
 # --- INTERFÍCIE ---
 c_left, c_right = st.columns([1, 1.5])
 
 with c_left:
-    st.markdown('<div class="section-header">1. Dades del Servei</div>', unsafe_allow_html=True)
+    st.subheader("1. Dades del Servei")
     llista_paises = sorted(df_datos['PAISES'].dropna().unique().tolist())
     pais = st.selectbox("País de Destí", llista_paises)
     cp = st.text_input("Codi Postal (2 dígits)", max_chars=2, help="Ex: 08")
     
-    with st.expander("⚙️ Serveis Addicionals (Opcional)", expanded=True):
+    with st.expander("Serveis Addicionals", expanded=True):
         col_x1, col_x2, col_x3 = st.columns(3)
-        es_adr = col_x1.checkbox("ADR", help="Mercaderia Perillosa")
-        vol_entrega = col_x2.checkbox("Entrega", help="Plataforma/Domicili")
-        vol_cita = col_x3.checkbox("Cita", help="Concertar hora")
+        es_adr = col_x1.checkbox("ADR")
+        vol_entrega = col_x2.checkbox("Entrega")
+        vol_cita = col_x3.checkbox("Cita")
     
-    st.markdown('<div class="section-header">2. La Càrrega</div>', unsafe_allow_html=True)
+    st.subheader("2. La Càrrega")
     tipus_palet = st.radio("Tipus:", ["EUR (1.2x0.8)", "Americà (1.2x1.0)", "Lliure"], horizontal=True)
     
     if "EUR" in tipus_palet: llarg, ample = 1.20, 0.80
@@ -194,7 +130,7 @@ with c_left:
 with c_right:
     if calcular:
         if not cp:
-            st.error("⚠️ Posa el Codi Postal")
+            st.error("Introdueix el Codi Postal")
         else:
             pes_total = pes_unitari * quantitat
             volum_total = llarg * ample * alt * quantitat
@@ -204,7 +140,7 @@ with c_right:
             rutes = mapa_zones[(mapa_zones['PAIS'] == pais.upper()) & (mapa_zones['ZIP CODE'] == cp_norm)].copy()
 
             if rutes.empty:
-                st.warning(f"❌ No s'ha trobat tarifa per a {pais} CP {cp_norm}")
+                st.warning(f"No s'ha trobat tarifa per a {pais} CP {cp_norm}")
             else:
                 ruta_final = rutes.iloc[0]
                 if es_adr and 'ADR' in rutes.columns:
@@ -245,23 +181,24 @@ with c_right:
 
                     total_final = preu_base + total_extres
 
+                    # ÚNIC TOC DE COLOR (NECESSARI PER DESTACAR EL PREU)
                     st.markdown(f"""
                     <div class="success-card">
-                        <div style="font-size:16px; color:#15803d; margin-bottom:5px;">PREU TOTAL ESTIMAT</div>
+                        <div style="font-size:16px; font-weight:bold;">PREU TOTAL ESTIMAT</div>
                         <div class="big-font">{total_final:.2f} €</div>
-                        <div style="font-size:12px; color:#15803d;">Pes Tasable: {pes_tasable:.2f} kg</div>
+                        <div style="font-size:12px;">Pes Tasable: {pes_tasable:.2f} kg</div>
                     </div>
                     """, unsafe_allow_html=True)
                     
                     st.write("")
                     c1, c2 = st.columns(2)
                     with c1:
-                        st.markdown("**📋 Info Operativa**")
+                        st.markdown("**Info Operativa**")
                         st.write(f"Zona: {zona}")
                         st.write(f"Sortides: {dies}")
                         st.write(f"Trànsit: {transit}")
                     with c2:
-                        st.markdown("**💰 Desglossament**")
+                        st.markdown("**Desglossament**")
                         st.write(f"Base: {preu_base:.2f}€")
                         for d in detalls: st.write(f"+ {d}")
                 else:
